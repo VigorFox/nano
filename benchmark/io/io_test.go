@@ -11,11 +11,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lonnng/nano"
-	"github.com/lonnng/nano/benchmark/testdata"
-	"github.com/lonnng/nano/component"
-	"github.com/lonnng/nano/serialize/protobuf"
-	"github.com/lonnng/nano/session"
+	"github.com/lonng/nano"
+	"github.com/lonng/nano/benchmark/testdata"
+	"github.com/lonng/nano/component"
+	"github.com/lonng/nano/serialize/protobuf"
+	"github.com/lonng/nano/session"
 )
 
 const (
@@ -56,14 +56,14 @@ func server() {
 func client() {
 	c := NewConnector()
 
-	if err := c.Start(addr); err != nil {
-		panic(err)
-	}
-
 	chReady := make(chan struct{})
 	c.OnConnected(func() {
 		chReady <- struct{}{}
 	})
+
+	if err := c.Start(addr); err != nil {
+		panic(err)
+	}
 
 	c.On("pong", func(data interface{}) {})
 

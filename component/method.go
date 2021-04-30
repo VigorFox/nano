@@ -1,4 +1,4 @@
-// Copyright (c) nano Author. All Rights Reserved.
+// Copyright (c) nano Authors. All Rights Reserved.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -25,7 +25,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/lonnng/nano/session"
+	"github.com/lonng/nano/session"
 )
 
 var (

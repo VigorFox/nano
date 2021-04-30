@@ -1,4 +1,4 @@
-// Copyright (c) nano Author. All Rights Reserved.
+// Copyright (c) nano Authors. All Rights Reserved.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -24,7 +24,7 @@ import (
 	"bytes"
 	"errors"
 
-	"github.com/lonnng/nano/internal/packet"
+	"github.com/lonng/nano/internal/packet"
 )
 
 // Codec constants.

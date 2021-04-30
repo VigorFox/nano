@@ -1,11 +1,11 @@
 # Nano [![Build Status][1]][2] [![GoDoc][3]][4] [![Go Report Card][5]][6] [![MIT licensed][7]][8] 
 
-[1]: https://travis-ci.org/lonnng/nano.svg?branch=master
-[2]: https://travis-ci.org/lonnng/nano
-[3]: https://godoc.org/github.com/lonnng/nano?status.svg
-[4]: https://godoc.org/github.com/lonnng/nano
-[5]: https://goreportcard.com/badge/github.com/lonnng/nano
-[6]: https://goreportcard.com/report/github.com/lonnng/nano
+[1]: https://travis-ci.org/lonng/nano.svg?branch=master
+[2]: https://travis-ci.org/lonng/nano
+[3]: https://godoc.org/github.com/lonng/nano?status.svg
+[4]: https://godoc.org/github.com/lonng/nano
+[5]: https://goreportcard.com/badge/github.com/lonng/nano
+[6]: https://goreportcard.com/report/github.com/lonng/nano
 [7]: https://img.shields.io/badge/license-MIT-blue.svg
 [8]: LICENSE
 
@@ -24,7 +24,7 @@ mobile games, etc of all sizes.
 
 The simplest "nano" application as shown in the following figure, you can make powerful applications by combining different components.
 
-![Application](./application.png)
+![Application](media/application.png)
 
 In fact, the `nano` application is a collection of  [Component ](./docs/get_started.md#component) , and a component is a bundle of  [Handler](./docs/get_started.md#handler), once you register a component to nano, nano will register all methods that can be converted to `Handler` to nano service container. Service was accessed by `Component.Handler`, and the handler will be called while client request. The handler will receive two parameters while handling a message:
   - `*session.Session`: corresponding a client that apply this request or notify.
@@ -34,62 +34,30 @@ While you had processed your logic, you can response or push message to the clie
 
 #### How to build distributed system with `Nano`
 
-Nano has no built-in distributed system components, but you can easily implement it with `gRPC` and `smux` . Here we take grpc as an example.
+Nano contains built-in distributed system solution, and make you creating a distributed game server easily.
 
-- First of all, you need to define a remote component
-```go
-type RemoteComponent struct {
-	rpcClients []*grpc.ClientConn
-}
-```
-
-- Second, fetch all grpc servers infomation from services like `etcd` or `consul`  in `nano` lifetime hooks
-```go
-type ServerInfo struct {
-	Host string `json:"host"`
-	Port int    `json:"port"`
-}
-
-// lifetime callback
-func (r *RemoteComponent) Init() {
-	// fetch server list from etcd
-	resp, err := http.Get("http://your_etcd_server/backend/server_list/area/10023")
-	if err != nil {
-		panic(err)
-	}
-	
-	servers := []ServerInfo{}
-	if err := json.NewDecoder(resp.Body).Decode(&servers); err != nil {
-		panic(err)
-	}
-	
-	for i := range servers {
-		server := servers[i]
-		client, err := grpc.Dial(fmt.Sprintf("%s:%d", server.Host, server.Post), options)
-		if err != nil {
-			panic(err)
-		}
-		r.rpcClients = append(r.rpcClients, client)
-	}
-}
-
-func (r *RemoteComponent) client(s *session.Session) *grpc.ClientConn {
-	// load balance
-	return r.rpcClients[s.UID() % len(s.rpcClients)]
-}
-
-// Your handler, accessed by:
-// nanoClient.Request("RemoteComponent.DemoHandler", &pb.DemoMsg{/*...*/})
-func (r *RemoteComponent) DemoHandler(s *session.Session, msg *pb.DemoMsg) error {
-	client := r.client(s)
-	// do something with client
-	// ....
-	// ...
-	return nil
-}
-```
+See: [The distributed chat demo](https://github.com/lonng/nano/tree/master/examples/cluster)
 
 The Nano will remain simple, but you can perform any operations in the component and get the desired goals. You can startup a group of `Nano` application as agent to dispatch message to backend servers.
+
+#### How to execute the asynchronous task
+
+```go
+func (manager *PlayerManager) Login(s *session.Session, msg *ReqPlayerLogin) error {
+    var onDBResult = func(player *Player) {
+        manager.players = append(manager.players, player)
+        s.Push("PlayerSystem.LoginSuccess", &ResPlayerLogin)
+    }
+    
+    // run slow task in new gorontine
+    go func() {
+        player, err := db.QueryPlayer(msg.PlayerId) // ignore error in demo
+        // handle result in main logical gorontine
+        nano.Invoke(func(){ onDBResult(player) })
+    }
+    return nil
+}
+```
 
 ## Documents
 
@@ -117,6 +85,7 @@ The Nano will remain simple, but you can perform any operations in the component
 - Demo
   + [Implement a chat room in 100 lines with nano and WebSocket](./examples/demo/chat)
   + [Tadpole demo](./examples/demo/tadpole)
+  + [四川麻将, 血战到底(三人模式/四人模式)完整项目实例](https://github.com/lonnng/nanoserver)
 
 ## Community
 
@@ -127,10 +96,14 @@ The Nano will remain simple, but you can perform any operations in the component
 
 - [空来血战](https://fir.im/tios)
 
+## Go version
+
+`> go1.8`
+
 ## Installation
 
 ```shell
-go get github.com/lonnng/nano
+go get github.com/lonng/nano
 
 # dependencies
 go get -u github.com/golang/protobuf
@@ -145,7 +118,7 @@ go get -u github.com/gorilla/websocket
 # Device: i5-6500 3.2GHz 4 Core/1000-Concurrent   => IOPS 11W(Average)
 # Other:  ...
 
-cd $GOPATH/src/github.com/lonnng/nano/benchmark/io
+cd $GOPATH/src/github.com/lonng/nano/benchmark/io
 go test -v -tags "benchmark"
 ```
 

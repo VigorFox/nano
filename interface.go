@@ -1,4 +1,4 @@
-// Copyright (c) nano Author. All Rights Reserved.
+// Copyright (c) nano Authors. All Rights Reserved.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -21,66 +21,112 @@
 package nano
 
 import (
-	"net/http"
+	"fmt"
+	"os"
+	"os/signal"
+	"path/filepath"
+	"strings"
+	"sync/atomic"
+	"syscall"
 	"time"
 
-	"github.com/lonnng/nano/component"
-	"github.com/lonnng/nano/internal/message"
+	"github.com/lonng/nano/cluster"
+	"github.com/lonng/nano/component"
+	"github.com/lonng/nano/internal/env"
+	"github.com/lonng/nano/internal/log"
+	"github.com/lonng/nano/internal/runtime"
+	"github.com/lonng/nano/scheduler"
+)
+
+var running int32
+
+// VERSION returns current nano version
+var VERSION = "0.5.0"
+
+var (
+	// app represents the current server process
+	app = &struct {
+		name    string    // current application name
+		startAt time.Time // startup time
+	}{}
 )
 
 // Listen listens on the TCP network address addr
 // and then calls Serve with handler to handle requests
 // on incoming connections.
-func Listen(addr string) {
-	listen(addr, false)
-}
+func Listen(addr string, opts ...Option) {
+	if atomic.AddInt32(&running, 1) != 1 {
+		log.Println("Nano has running")
+		return
+	}
 
-// ListenWS listens on the TCP network address addr
-// and then upgrades the HTTP server connection to the WebSocket protocol
-// to handle requests on incoming connections.
-func ListenWS(addr string) {
-	listen(addr, true)
-}
+	// application initialize
+	app.name = strings.TrimLeft(filepath.Base(os.Args[0]), "/")
+	app.startAt = time.Now()
 
-// Register register a component with options
-func Register(c component.Component, options ...component.Option) {
-	comps = append(comps, regComp{c, options})
-}
+	// environment initialize
+	if wd, err := os.Getwd(); err != nil {
+		panic(err)
+	} else {
+		env.Wd, _ = filepath.Abs(wd)
+	}
 
-// SetHeartbeatInterval set heartbeat time interval
-func SetHeartbeatInterval(d time.Duration) {
-	env.heartbeat = d
-}
+	opt := cluster.Options{
+		Components: &component.Components{},
+	}
+	for _, option := range opts {
+		option(&opt)
+	}
 
-// SetCheckOriginFunc set the function that check `Origin` in http headers
-func SetCheckOriginFunc(fn func(*http.Request) bool) {
-	env.checkOrigin = fn
+	// Use listen address as client address in non-cluster mode
+	if !opt.IsMaster && opt.AdvertiseAddr == "" && opt.ClientAddr == "" {
+		log.Println("The current server running in singleton mode")
+		opt.ClientAddr = addr
+	}
+
+	// Set the retry interval to 3 secondes if doesn't set by user
+	if opt.RetryInterval == 0 {
+		opt.RetryInterval = time.Second * 3
+	}
+
+	node := &cluster.Node{
+		Options:     opt,
+		ServiceAddr: addr,
+	}
+	err := node.Startup()
+	if err != nil {
+		log.Fatalf("Node startup failed: %v", err)
+	}
+	runtime.CurrentNode = node
+
+	if node.ClientAddr != "" {
+		log.Println(fmt.Sprintf("Startup *Nano gate server* %s, client address: %v, service address: %s",
+			app.name, node.ClientAddr, node.ServiceAddr))
+	} else {
+		log.Println(fmt.Sprintf("Startup *Nano backend server* %s, service address %s",
+			app.name, node.ServiceAddr))
+	}
+
+	go scheduler.Sched()
+	sg := make(chan os.Signal)
+	signal.Notify(sg, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGKILL, syscall.SIGTERM)
+
+	select {
+	case <-env.Die:
+		log.Println("The app will shutdown in a few seconds")
+	case s := <-sg:
+		log.Println("Nano server got signal", s)
+	}
+
+	log.Println("Nano server is stopping...")
+
+	node.Shutdown()
+	runtime.CurrentNode = nil
+	scheduler.Close()
+	atomic.StoreInt32(&running, 0)
 }
 
 // Shutdown send a signal to let 'nano' shutdown itself.
 func Shutdown() {
-	close(env.die)
-}
-
-// EnableDebug let 'nano' to run under debug mode.
-func EnableDebug() {
-	env.debug = true
-}
-
-// OnSessionClosed set the Callback which will be called when session is closed
-// Waring: session has closed,
-func OnSessionClosed(cb SessionClosedHandler) {
-	env.muCallbacks.Lock()
-	defer env.muCallbacks.Unlock()
-
-	env.callbacks = append(env.callbacks, cb)
-}
-
-// SetDictionary set routes map, TODO(warning): set dictionary in runtime would be a dangerous operation!!!!!!
-func SetDictionary(dict map[string]uint16) {
-	message.SetDictionary(dict)
-}
-
-func SetWSPath(path string) {
-	env.wsPath = path
+	close(env.Die)
 }
